@@ -61,5 +61,5 @@ app.use("/api/sf/v1/contacts", contactRoutes);
 require("./services/reminderJob");
 // start server
 app.listen(PORT, () => {
-    console.log("🚀 Server running on port 5000");
+    console.log(`🚀 Server running on port ${PORT}`);
 });
