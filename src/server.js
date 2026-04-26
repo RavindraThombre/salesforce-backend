@@ -6,7 +6,7 @@ const path = require("path");
 // const seedAdmin = require("./config/seedAdmin");
 
 const connectDB = require("./config/db");
-
+const PORT = process.env.PORT || 5000;
 const app = express();
 
 app.use(cors());
@@ -60,6 +60,6 @@ app.use("/api/sf/v1/contacts", contactRoutes);
 
 require("./services/reminderJob");
 // start server
-app.listen(5000, () => {
+app.listen(PORT, () => {
     console.log("🚀 Server running on port 5000");
 });
