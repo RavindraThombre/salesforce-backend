@@ -12,8 +12,8 @@ const {
 } = require("../controllers/blogController");
 
 const { verifyToken, isAdmin } = require("../middleware/authMiddleware");
-const upload = require("../middleware/upload");
-
+const createUploader = require("../middleware/upload");
+const upload = createUploader("blogs");
 // PUBLIC
 router.get("/", getBlogs);
 router.get("/:id", getBlogById);

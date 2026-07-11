@@ -1,14 +1,17 @@
 const multer = require("multer");
-const path = require("path");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 
-const storage = multer.diskStorage({
-    destination: "uploads/",
+const createUploader = (folder) => {
+    const storage = new CloudinaryStorage({
+        cloudinary,
+        params: async (req, file) => ({
+            folder: `blueCloudMentor/${folder}`,
+            allowed_formats: ["jpg", "jpeg", "png", "webp"],
+        }),
+    });
 
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    },
-});
+    return multer({ storage });
+};
 
-const upload = multer({ storage });
-
-module.exports = upload;
+module.exports = createUploader;

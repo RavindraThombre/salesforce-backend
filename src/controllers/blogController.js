@@ -1,6 +1,5 @@
 // controllers/blogController.js
-const fs = require("fs");
-const path = require("path");
+const cloudinary = require("../config/cloudinary");
 const Blog = require("../models/Blog");
 
 // ✅ GET ALL
@@ -38,8 +37,8 @@ exports.createBlog = async (req, res) => {
         const blog = await Blog.create({
             title,
             content,
-            description, // ✅ manual
-            image: req.file ? `/uploads/${req.file.filename}` : "",
+            description,
+            image: req.file ? req.file.path : "",
             isPublished: true,
         });
 
@@ -55,32 +54,38 @@ exports.updateBlog = async (req, res) => {
         const blog = await Blog.findById(req.params.id);
 
         if (!blog) {
-            return res.status(404).json({ message: "Blog not found" });
+            return res.status(404).json({
+                message: "Blog not found",
+            });
         }
 
-        // 🔥 DELETE OLD IMAGE
-        if (req.file && blog.image) {
-            const oldImagePath = path.join(__dirname, "..", blog.image);
-
-            if (fs.existsSync(oldImagePath)) {
-                fs.unlinkSync(oldImagePath);
-            }
+        if (req.body.title) {
+            blog.title = req.body.title;
         }
-
-        // 🔥 UPDATE FIELDS (MANUAL ONLY)
-        if (req.body.title) blog.title = req.body.title;
 
         if (req.body.description) {
-            blog.description = req.body.description; // ✅ manual
+            blog.description = req.body.description;
         }
 
         if (req.body.content) {
-            blog.content = req.body.content; // ✅ no auto logic
+            blog.content = req.body.content;
         }
 
-        // 🔥 UPDATE IMAGE
+        // Upload new image
         if (req.file) {
-            blog.image = `/uploads/${req.file.filename}`;
+
+            // Delete old Cloudinary image
+            if (blog.image) {
+                const publicId = blog.image
+                    .split("/")
+                    .slice(-2)
+                    .join("/")
+                    .split(".")[0];
+
+                await cloudinary.uploader.destroy(publicId);
+            }
+
+            blog.image = req.file.path;
         }
 
         await blog.save();
@@ -88,15 +93,43 @@ exports.updateBlog = async (req, res) => {
         res.json(blog);
 
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };
+
 // ✅ DELETE
 exports.deleteBlog = async (req, res) => {
     try {
+
+        const blog = await Blog.findById(req.params.id);
+
+        if (!blog) {
+            return res.status(404).json({
+                message: "Blog not found",
+            });
+        }
+
+        if (blog.image) {
+            const publicId = blog.image
+                .split("/")
+                .slice(-2)
+                .join("/")
+                .split(".")[0];
+
+            await cloudinary.uploader.destroy(publicId);
+        }
+
         await Blog.findByIdAndDelete(req.params.id);
-        res.json({ message: "Deleted" });
+
+        res.json({
+            message: "Deleted",
+        });
+
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };

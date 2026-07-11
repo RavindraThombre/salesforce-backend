@@ -1,6 +1,7 @@
 // controllers/courseController.js
 
 const Course = require("../models/Course");
+const cloudinary = require("../config/cloudinary");
 
 // ✅ GET ALL COURSES (NO CHANGE)
 exports.getCourses = async (req, res) => {
@@ -38,18 +39,17 @@ exports.createCourse = async (req, res) => {
             });
         }
 
-        const thumbnail = req.file
-            ? `/uploads/${req.file.filename}`
-            : "";
+        const thumbnail = req.file?.path || "";
+        const thumbnailPublicId = req.file?.filename || "";;
 
         const course = new Course({
             title,
             description,
             price: isFree ? 0 : price,
             discountPrice: isFree ? 0 : discountPrice,
-            // isFree: isFree === "true" ? true : false,
             isFree: isFree === "true" || isFree === true,
             thumbnail,
+            thumbnailPublicId,
         });
 
         await course.save();
@@ -63,42 +63,56 @@ exports.createCourse = async (req, res) => {
 // ✅ UPDATE COURSE (UPDATED - SAFE)
 exports.updateCourse = async (req, res) => {
     try {
-        const updateData = {
-            ...req.body,
-        };
+        const course = await Course.findById(req.params.id);
 
-        // ✅ NEW: update thumbnail only if new file uploaded
+        if (!course) {
+            return res.status(404).json({
+                message: "Course not found",
+            });
+        }
+
+        Object.assign(course, req.body);
+
         if (req.file) {
-            updateData.thumbnail = `/uploads/${req.file.filename}`;
+
+            if (course.thumbnailPublicId) {
+                await cloudinary.uploader.destroy(course.thumbnailPublicId);
+            }
+
+            course.thumbnail = req.file.path;
+            course.thumbnailPublicId = req.file.filename;
         }
 
-        const updatedCourse = await Course.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true }
-        );
+        await course.save();
 
-        if (!updatedCourse) {
-            return res.status(404).json({ message: "Course not found" });
-        }
+        res.json(course);
 
-        res.json(updatedCourse);
-    } catch (error) {
-        res.status(500).json({ message: "Course update failed" });
+    } catch (err) {
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };
 
 // ✅ DELETE COURSE (NO CHANGE)
 exports.deleteCourse = async (req, res) => {
-    try {
-        const deleted = await Course.findByIdAndDelete(req.params.id);
 
-        if (!deleted) {
-            return res.status(404).json({ message: "Course not found" });
-        }
+    const course = await Course.findById(req.params.id);
 
-        res.json({ message: "Course deleted successfully" });
-    } catch (error) {
-        res.status(500).json({ message: "Course deletion failed" });
+    if (!course) {
+        return res.status(404).json({
+            message: "Course not found",
+        });
     }
+
+    if (course.thumbnailPublicId) {
+        await cloudinary.uploader.destroy(course.thumbnailPublicId);
+    }
+
+    await course.deleteOne();
+
+    res.json({
+        message: "Deleted successfully",
+    });
+
 };

@@ -1,49 +1,63 @@
 const mongoose = require("mongoose");
 
-const courseSchema = new mongoose.Schema({
-    title: String,
-    description: String,
+const courseSchema = new mongoose.Schema(
+    {
+        title: {
+            type: String,
+            required: true,
+            trim: true,
+        },
 
-    price: Number,
-    discountPrice: Number,
+        description: {
+            type: String,
+            default: "",
+        },
 
-    thumbnail: String,
-    duration: String,
+        price: Number,
 
-    trainerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-    },
+        discountPrice: Number,
 
-    level: {
-        type: String,
-        enum: ["Beginner", "Intermediate", "Advanced"],
-    },
+        thumbnail: {
+            type: String,
+            default: "",
+        },
 
-    status: {
-        type: String,
-        enum: ["Active", "Inactive"],
-        default: "Active",
-    },
+        thumbnailPublicId: {
+            type: String,
+            default: "",
+        },
 
-    students: [
-        {
+        duration: String,
+
+        trainerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+
+        level: {
+            type: String,
+            enum: ["Beginner", "Intermediate", "Advanced"],
+        },
+
+        status: {
+            type: String,
+            enum: ["Active", "Inactive"],
+            default: "Active",
+        },
+
+        students: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: "Student",
-        },
-    ],
+        }],
 
-    liveClasses: [
-        {
+        liveClasses: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: "LiveClass",
-        },
-    ],
-
-    createdAt: {
-        type: Date,
-        default: Date.now,
+        }],
     },
-});
+    {
+        timestamps: true,
+    }
+);
 
 module.exports = mongoose.model("Course", courseSchema);

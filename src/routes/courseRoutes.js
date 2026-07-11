@@ -13,7 +13,8 @@ const {
 
 const { verifyToken, isAdmin } = require("../middleware/authMiddleware");
 
-const upload = require("../middleware/upload");
+const createUploader = require("../middleware/upload");
+const upload = createUploader("courses");
 
 // ✅ PUBLIC
 router.get("/", getCourses);

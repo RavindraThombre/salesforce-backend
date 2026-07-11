@@ -13,7 +13,8 @@ const {
 } = require("../controllers/trainerController");
 
 const { verifyToken } = require("../middleware/authMiddleware");
-const upload = require("../middleware/upload");
+const createUploader = require("../middleware/upload");
+const upload = createUploader("trainers");
 
 
 // ### 🔐 TRAINER ROUTES
