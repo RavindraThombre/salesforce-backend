@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { CONTACT_STATUS } = require("../constants/contactStatus");
 
 const contactSchema = new mongoose.Schema({
     name: String,
@@ -13,8 +14,8 @@ const contactSchema = new mongoose.Schema({
 
     status: {
         type: String,
-        enum: ["New", "Replied", "Closed"],
-        default: "New",
+        enum: Object.values(CONTACT_STATUS),
+        default: CONTACT_STATUS.NEW,
     },
 
     repliedAt: Date,
