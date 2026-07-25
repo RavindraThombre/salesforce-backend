@@ -31,23 +31,62 @@ exports.getCourseById = async (req, res) => {
 // ✅ CREATE COURSE (UPDATED - SAFE)
 exports.createCourse = async (req, res) => {
     try {
-        const { title, description, price, discountPrice, isFree } = req.body;
+        const {
+            title,
+            description,
+            price,
+            discountPrice,
+            isFree,
+        } = req.body;
 
-        if (!title) {
+        if (!title?.trim()) {
             return res.status(400).json({
-                message: "Title and price are required",
+                message: "Course title is required",
             });
         }
 
+        if (!description?.trim()) {
+            return res.status(400).json({
+                message: "Course description is required",
+            });
+        }
+
+        // FormData sends boolean as string: "true" / "false"
+        const isFreeCourse = isFree === "true" || isFree === true;
+
+        const coursePrice = Number(price) || 0;
+        const courseDiscountPrice = Number(discountPrice) || 0;
+
+        // Validate paid course
+        if (!isFreeCourse) {
+            if (coursePrice <= 0) {
+                return res.status(400).json({
+                    message: "Price must be greater than 0",
+                });
+            }
+
+            // Discount cannot be greater than original price
+            if (courseDiscountPrice > coursePrice) {
+                return res.status(400).json({
+                    message: "Discount price cannot be greater than original price",
+                });
+            }
+        }
+
         const thumbnail = req.file?.path || "";
-        const thumbnailPublicId = req.file?.filename || "";;
+        const thumbnailPublicId = req.file?.filename || "";
 
         const course = new Course({
-            title,
-            description,
-            price: isFree ? 0 : price,
-            discountPrice: isFree ? 0 : discountPrice,
-            isFree: isFree === "true" || isFree === true,
+            title: title.trim(),
+            description: description.trim(),
+
+            // Use converted boolean here
+            isFree: isFreeCourse,
+
+            // Free = 0, Paid = submitted values
+            price: isFreeCourse ? 0 : coursePrice,
+            discountPrice: isFreeCourse ? 0 : courseDiscountPrice,
+
             thumbnail,
             thumbnailPublicId,
         });
@@ -56,7 +95,11 @@ exports.createCourse = async (req, res) => {
 
         res.status(201).json(course);
     } catch (error) {
-        res.status(500).json({ message: "Course creation failed" });
+        console.error("Create course error:", error);
+
+        res.status(500).json({
+            message: "Course creation failed",
+        });
     }
 };
 

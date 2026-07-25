@@ -6,15 +6,52 @@ const liveClassSchema = new mongoose.Schema({
         ref: "Course",
         required: true,
     },
-    course: String,     // display name (fast UI)
+
+    course: String,
+
     trainerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+        required: true,
     },
+
     level: String,
-    topic: String,
-    date: Date,
-    time: String,
+
+    topic: {
+        type: String,
+        required: true,
+    },
+
+    date: {
+        type: Date,
+        required: true,
+    },
+
+    time: {
+        type: String,
+        required: true,
+    },
+
+    startTime: {
+        type: Date,
+        required: true,
+    },
+
+    endTime: {
+        type: Date,
+        required: true,
+    },
+
+    durationMinutes: {
+        type: Number,
+        required: true,
+    },
+
+    timezone: {
+        type: String,
+        default: "Asia/Kolkata",
+    },
+
     zoomLink: String,
 
     isFree: {
@@ -22,7 +59,6 @@ const liveClassSchema = new mongoose.Schema({
         default: false,
     },
 
-    // ✅ ADD HERE 👇 (IMPORTANT)
     reminderSent: {
         type: Boolean,
         default: false,

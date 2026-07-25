@@ -167,3 +167,58 @@ exports.changeTrainerPassword = async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 };
+
+
+
+//admin side
+// ✅ UPDATE TRAINER (ADMIN)
+exports.updateTrainer = async (req, res) => {
+    try {
+        if (req.user.role !== "admin") {
+            return res.status(403).json({ message: "Access denied" });
+        }
+
+        const { id } = req.params;
+        const { name, email } = req.body;
+
+        if (!name || !email) {
+            return res.status(400).json({
+                message: "Name and email are required",
+            });
+        }
+
+        const trainer = await User.findById(id);
+
+        if (!trainer) {
+            return res.status(404).json({
+                message: "Trainer not found",
+            });
+        }
+
+        // Ensure email is unique
+        const existingUser = await User.findOne({
+            email,
+            _id: { $ne: id },
+        });
+
+        if (existingUser) {
+            return res.status(400).json({
+                message: "Email already exists",
+            });
+        }
+
+        trainer.name = name;
+        trainer.email = email;
+
+        await trainer.save();
+
+        const updatedTrainer = await User.findById(id).select("-password");
+
+        res.json(updatedTrainer);
+    } catch (err) {
+        console.error("UPDATE TRAINER ERROR:", err);
+        res.status(500).json({
+            message: err.message,
+        });
+    }
+};

@@ -1,3 +1,4 @@
+const { CONTACT_STATUS } = require("../constants/contactStatus");
 const Contact = require("../models/Contact");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
@@ -70,9 +71,15 @@ exports.replyToContact = async (req, res) => {
             });
         }
 
+        if (contact.status === CONTACT_STATUS.REPLIED) {
+            return res.status(400).json({
+                message: "This contact has already been replied to.",
+            });
+        }
+
         // ✅ update contact
         contact.reply = reply;
-        contact.status = "Replied";
+        contact.status = CONTACT_STATUS.REPLIED;
         contact.repliedAt = new Date();
 
         await contact.save();
@@ -97,5 +104,26 @@ exports.replyToContact = async (req, res) => {
     } catch (err) {
         console.error("REPLY ERROR:", err);
         res.status(500).json({ message: err.message });
+    }
+};
+
+
+exports.deleteContact = async (req, res) => {
+    try {
+        const contact = await Contact.findByIdAndDelete(req.params.id);
+
+        if (!contact) {
+            return res.status(404).json({
+                message: "Contact not found",
+            });
+        }
+
+        res.json({
+            message: "Contact deleted successfully",
+        });
+    } catch (err) {
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };

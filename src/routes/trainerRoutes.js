@@ -7,6 +7,7 @@ const {
     createTrainer,
     getTrainers,
     deleteTrainer,
+    updateTrainer,
     getTrainerProfile,
     updateTrainerProfile,
     changeTrainerPassword,
@@ -29,7 +30,6 @@ router.put(
     upload.single("avatar"),
     updateTrainerProfile
 );
-
 // 🔐 PASSWORD
 router.put(
     "/change-password",
@@ -42,5 +42,6 @@ router.put(
 router.post("/create", verifyToken, createTrainer);
 router.get("/", verifyToken, getTrainers);
 router.delete("/:id", verifyToken, deleteTrainer);
+router.put("/:id", verifyToken, updateTrainer);
 
 module.exports = router;

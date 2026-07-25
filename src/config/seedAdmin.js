@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const seedAdmin = async () => {
     try {
         const existingAdmin = await User.findOne({
-            email: "ravindrathombre66@gmail.com",
+            email: "ravindra.thombre@bluecloudmentor.com",
         });
 
         if (existingAdmin) {
@@ -12,11 +12,11 @@ const seedAdmin = async () => {
             return;
         }
 
-        const hashedPassword = await bcrypt.hash("Ravindra@123$%^", 10);
+        const hashedPassword = await bcrypt.hash("Blue@123$%^", 10);
 
         const admin = new User({
-            name: "Ravindra Thombre",
-            email: "ravindrathombre66@gmail.com",
+            name: "Ravindra Kailas Thombre",
+            email: "ravindra.thombre@bluecloudmentor.com",
             password: hashedPassword,
             role: "admin",
         });

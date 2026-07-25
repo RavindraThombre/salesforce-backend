@@ -23,48 +23,49 @@ exports.getPublicCourses = async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 };
-// ✅ GET LIVE CLASSES
+
+// GET PUBLIC LIVE CLASSES
 exports.getLiveClasses = async (req, res) => {
     try {
         const now = new Date();
+        const classes = await LiveClass.find({
+            endTime: {
+                $gte: now,
+            },
+        })
+            .populate(
+                "courseId",
+                "title level price discountPrice"
+            )
+            .populate(
+                "trainerId",
+                "name email"
+            )
+            .sort({
+                startTime: 1,
+            });
 
-        const classes = await LiveClass.find()
-            .populate("courseId", "title level price discountPrice")
-            .populate("trainerId", "name email");
-
-        // ✅ FILTER FUTURE CLASSES ONLY
-        const filtered = classes.filter((c) => {
-            const classDateTime = new Date(c.date);
-
-            if (c.time) {
-                const [hours, minutes] = c.time.split(":");
-                classDateTime.setHours(Number(hours));
-                classDateTime.setMinutes(Number(minutes));
-            }
-
-            return classDateTime >= now;
-        });
-
-        // ✅ SORT AFTER FILTER
-        filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        const result = filtered.map((c) => {
+        const result = classes.map((c) => {
             const price =
-                c.courseId?.discountPrice ?? c.courseId?.price ?? 0;
-            const isCourseFree = price === 0;
-            const classDateTime = new Date(c.date);
-            if (c.time) {
-                const [hours, minutes] = c.time.split(":");
-                classDateTime.setHours(Number(hours));
-                classDateTime.setMinutes(Number(minutes));
-            }
-            const now = new Date();
+                c.courseId?.discountPrice ??
+                c.courseId?.price ??
+                0;
 
-            // ⏱ assume class duration = 2 hours
-            const endTime = new Date(classDateTime.getTime() + 2 * 60 * 60 * 1000);
+            const isCourseFree =
+                price === 0;
 
-            const isLive = now >= classDateTime && now <= endTime;
-            const isUpcoming = now < classDateTime;
+            const startTime =
+                new Date(c.startTime);
+
+            const endTime =
+                new Date(c.endTime);
+
+            const isLive =
+                now >= startTime &&
+                now < endTime;
+
+            const isUpcoming =
+                now < startTime;
 
             return {
                 _id: c._id,
@@ -75,20 +76,30 @@ exports.getLiveClasses = async (req, res) => {
                 topic: c.topic,
                 date: c.date,
                 time: c.time,
+                startTime: c.startTime,
+                endTime: c.endTime,
+                durationMinutes: c.durationMinutes,
+                timezone: c.timezone || "Asia/Kolkata",
                 zoomLink: c.zoomLink,
-
                 isFree: c.isFree || isCourseFree,
                 price,
-
                 isLive,
                 isUpcoming,
-                startTime: classDateTime,
             };
         });
-
+        res.set(
+            "Cache-Control",
+            "no-store"
+        );
         res.json(result);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error(
+            "Get public live classes error:",
+            err
+        );
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };
 
