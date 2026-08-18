@@ -9,7 +9,6 @@ const connectDB = require("./config/db");
 const PORT = process.env.PORT || 5000;
 const app = express();
 
-
 app.use(
     cors({
         origin: [
@@ -44,9 +43,12 @@ const publicRoutes = require("./routes/publicRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const trainerRoutes = require("./routes/trainerRoutes");
 const contactRoutes = require("./routes/contactRoutes");
+const jobPositionRoutes = require("./routes/jobPositionRoutes");
+const careerRoutes = require("./routes/careerRoutes");
+const jobApplicationRoutes = require("./routes/jobApplicationRoutes")
 
 app.get("/", (req, res) => {
-    res.send("LMS API Running 🚀");
+    res.send("Salesforce API Running 🚀");
 });
 
 app.use("/api/sf/v1/auth", authRoutes);
@@ -65,8 +67,9 @@ app.use("/api/sf/v1/public", publicRoutes);
 app.use("/api/sf/v1/payments", paymentRoutes);
 app.use("/api/sf/v1/trainers", trainerRoutes);
 app.use("/api/sf/v1/contacts", contactRoutes);
-
-
+app.use("/api/sf/v1/admin/job-positions", jobPositionRoutes);
+app.use("/api/sf/v1/careers", careerRoutes);
+app.use("/api/sf/v1/job-applications", jobApplicationRoutes);
 
 require("./services/reminderJob");
 // start server
