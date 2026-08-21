@@ -28,6 +28,16 @@ const courseSchema = new mongoose.Schema(
             default: 0,
         },
 
+        averageRating: {
+            type: Number,
+            default: 0,
+        },
+
+        totalReviews: {
+            type: Number,
+            default: 0,
+        },
+
         thumbnail: {
             type: String,
             default: "",

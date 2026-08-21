@@ -3,7 +3,7 @@
 const Course = require("../models/Course");
 const cloudinary = require("../config/cloudinary");
 
-// ✅ GET ALL COURSES (NO CHANGE)
+// GET ALL COURSES (NO CHANGE)
 exports.getCourses = async (req, res) => {
     try {
         const courses = await Course.find().sort({ createdAt: -1 });
@@ -13,7 +13,7 @@ exports.getCourses = async (req, res) => {
     }
 };
 
-// ✅ GET SINGLE COURSE (NO CHANGE)
+// GET SINGLE COURSE (NO CHANGE)
 exports.getCourseById = async (req, res) => {
     try {
         const course = await Course.findById(req.params.id);

@@ -39,5 +39,4 @@ router.get("/blogs", getPublicBlogs);
 router.get("/blogs/:id", getPublicBlogById);
 router.get("/testimonials", getPublicTestimonials);
 
-
 module.exports = router;

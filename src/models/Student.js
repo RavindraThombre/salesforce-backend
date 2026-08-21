@@ -7,8 +7,8 @@ const studentSchema = new mongoose.Schema({
         required: true,
     },
 
-    phone: String,
-    city: String,
+    // phone: String,
+    // city: String,
 
     // ✅ enrolled courses
     courses: [
