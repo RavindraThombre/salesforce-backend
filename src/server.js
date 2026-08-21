@@ -46,6 +46,7 @@ const contactRoutes = require("./routes/contactRoutes");
 const jobPositionRoutes = require("./routes/jobPositionRoutes");
 const careerRoutes = require("./routes/careerRoutes");
 const jobApplicationRoutes = require("./routes/jobApplicationRoutes")
+const courseReviewRoutes = require("./routes/courseReviewRoutes");
 
 app.get("/", (req, res) => {
     res.send("Salesforce API Running 🚀");
@@ -70,6 +71,7 @@ app.use("/api/sf/v1/contacts", contactRoutes);
 app.use("/api/sf/v1/admin/job-positions", jobPositionRoutes);
 app.use("/api/sf/v1/careers", careerRoutes);
 app.use("/api/sf/v1/job-applications", jobApplicationRoutes);
+app.use("/api/sf/v1/course-reviews", courseReviewRoutes);
 
 require("./services/reminderJob");
 // start server

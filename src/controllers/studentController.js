@@ -8,69 +8,106 @@ exports.getStudentDashboard = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const payments = await Payment.find({ studentId: userId })
+        const student = await Student.findOne({
+            userId,
+        }).populate("courses");
+
+        if (!student) {
+            return res.json({
+                totalCourses: 0,
+                totalLiveClasses: 0,
+                totalCertificates: 0,
+                upcomingClass: null,
+                courseProgress: [],
+                activity: [],
+            });
+        }
+
+        const payments = await Payment.find({
+            studentId: userId,
+            status: "completed",
+        })
             .populate("courseId")
             .sort({ createdAt: -1 });
 
-        // ✅ FIX: remove duplicates
-        const courseIds = [
-            ...new Set(
-                payments
-                    .map((p) => p.courseId?._id?.toString())
-                    .filter(Boolean)
-            ),
-        ];
+        const courseMap = new Map();
+
+        // =========================
+        // FREE ENROLLED COURSES
+        // =========================
+        student.courses.forEach((course) => {
+            if (course?._id) {
+                courseMap.set(
+                    course._id.toString(),
+                    course
+                );
+            }
+        });
+
+        // =========================
+        // PAID COURSES
+        // =========================
+        payments.forEach((payment) => {
+            if (payment.courseId?._id) {
+                courseMap.set(
+                    payment.courseId._id.toString(),
+                    payment.courseId
+                );
+            }
+        });
+
+        const courseIds = Array.from(courseMap.keys());
 
         const totalCourses = courseIds.length;
 
         const liveClasses = await LiveClass.find({
-            courseId: { $in: courseIds },
+            courseId: {
+                $in: courseIds,
+            },
         });
 
         const totalLiveClasses = liveClasses.length;
 
-        const totalCertificates = payments.filter(
-            (p) => p.status === "completed"
-        ).length;
+        const certificates = await Certificate.find({
+            studentId: student._id,
+        });
+
+        const totalCertificates = certificates.length;
 
         const now = new Date();
 
         const upcomingClass = await LiveClass.findOne({
-            courseId: { $in: courseIds },
-            date: { $gte: now },
+            courseId: {
+                $in: courseIds,
+            },
+            date: {
+                $gte: now,
+            },
         })
             .populate("courseId", "title")
-            .sort({ date: 1 });
+            .sort({
+                date: 1,
+            });
 
-        const courseProgressMap = {};
+        const courseProgress = Array.from(
+            courseMap.values()
+        ).map((course) => ({
+            courseName: course.title,
+            progress: 0,
+        }));
 
-        payments.forEach((p) => {
-            const courseName = p.courseId?.title || "Course";
-            const progress = p.status === "completed" ? 100 : 30;
-            courseProgressMap[courseName] = progress;
-        });
-
-        const courseProgress = Object.keys(courseProgressMap).map(
-            (courseName) => ({
-                courseName,
-                progress: courseProgressMap[courseName],
-            })
-        );
-
-        const paymentActivity = payments.map((p) => ({
+        const paymentActivity = payments.map((payment) => ({
             type: "payment",
-            text: `Enrolled in ${p.courseId?.title || "Course"}`,
-            date: p.createdAt,
+            text: `Enrolled in ${payment.courseId?.title || "Course"
+                }`,
+            date: payment.createdAt,
         }));
 
-        const classActivity = liveClasses.map((c) => ({
-            type: "class",
-            text: `Attended ${c.topic}`,
-            date: c.date,
-        }));
-
-        const activity = [...paymentActivity, ...classActivity]
-            .sort((a, b) => new Date(b.date) - new Date(a.date))
+        const activity = paymentActivity
+            .sort(
+                (a, b) =>
+                    new Date(b.date) - new Date(a.date)
+            )
             .slice(0, 5);
 
         res.json({
@@ -82,10 +119,11 @@ exports.getStudentDashboard = async (req, res) => {
             activity,
         });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };
-
 /* ================= UPCOMING CLASSES ================= */
 exports.getUpcomingClasses = async (req, res) => {
     try {
@@ -117,6 +155,14 @@ exports.getMyCourses = async (req, res) => {
     try {
         const userId = req.user.id;
 
+        const student = await Student.findOne({
+            userId,
+        }).populate("courses");
+
+        if (!student) {
+            return res.json([]);
+        }
+
         const payments = await Payment.find({
             studentId: userId,
             status: "completed",
@@ -124,16 +170,43 @@ exports.getMyCourses = async (req, res) => {
             .populate("courseId")
             .sort({ createdAt: -1 });
 
-        const courses = payments.map((p) => ({
-            _id: p.courseId?._id,
-            title: p.courseId?.title,
-            price: p.amount || 0,
-            enrolledAt: p.createdAt,
-        }));
+        const courseMap = new Map();
+
+        // =========================
+        // FREE / DIRECT ENROLLMENT
+        // =========================
+        student.courses.forEach((course) => {
+            if (!course?._id) return;
+
+            courseMap.set(course._id.toString(), {
+                _id: course._id,
+                title: course.title,
+                price: course.price || 0,
+                enrolledAt: student.createdAt,
+            });
+        });
+
+        // =========================
+        // PAID ENROLLMENT
+        // =========================
+        payments.forEach((payment) => {
+            const course = payment.courseId;
+            if (!course?._id) return;
+            courseMap.set(course._id.toString(), {
+                _id: course._id,
+                title: course.title,
+                price: payment.amount || 0,
+                enrolledAt: payment.createdAt,
+            });
+        });
+
+        const courses = Array.from(courseMap.values());
 
         res.json(courses);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };
 
@@ -141,20 +214,45 @@ exports.getMyCourses = async (req, res) => {
 exports.getCourseDetail = async (req, res) => {
     try {
         const { courseId } = req.params;
+        const userId = req.user.id;
+
+        const student = await Student.findOne({
+            userId,
+            courses: courseId,
+        });
 
         const payment = await Payment.findOne({
-            studentId: req.user.id,
+            studentId: userId,
             courseId,
             status: "completed",
-        }).populate("courseId", "title"); // ✅ FIX
+        }).populate("courseId", "title");
 
-        if (!payment) {
+        if (!student && !payment) {
             return res.status(403).json({
                 message: "You are not enrolled in this course",
             });
         }
 
-        const liveClasses = await LiveClass.find({ courseId }).sort({
+        let title = payment?.courseId?.title;
+
+        if (!title) {
+            const enrolledStudent = await Student.findOne({
+                userId,
+            }).populate({
+                path: "courses",
+                match: {
+                    _id: courseId,
+                },
+            });
+
+            title =
+                enrolledStudent?.courses?.[0]?.title ||
+                "Course";
+        }
+
+        const liveClasses = await LiveClass.find({
+            courseId,
+        }).sort({
             date: 1,
         });
 
@@ -162,12 +260,14 @@ exports.getCourseDetail = async (req, res) => {
 
         res.json({
             _id: courseId,
-            title: payment.courseId?.title,
+            title,
             liveClasses,
             recordings,
         });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };
 
@@ -283,15 +383,29 @@ exports.getStudentCertificates = async (req, res) => {
 exports.checkEnrollment = async (req, res) => {
     try {
         const { courseId } = req.params;
+        const userId = req.user.id;
 
-        const existing = await Payment.findOne({
-            studentId: req.user.id,
+        const studentEnrollment = await Student.exists({
+            userId,
+            courses: courseId,
+        });
+
+        const paymentEnrollment = await Payment.exists({
+            studentId: userId,
             courseId,
             status: "completed",
         });
 
-        res.json({ enrolled: !!existing });
+        const enrolled =
+            !!studentEnrollment ||
+            !!paymentEnrollment;
+
+        res.json({
+            enrolled,
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(500).json({
+            message: err.message,
+        });
     }
 };
