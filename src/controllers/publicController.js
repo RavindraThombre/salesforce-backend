@@ -16,6 +16,9 @@ exports.getPublicCourses = async (req, res) => {
             originalPrice: c.discountPrice ? c.price : null,
             level: c.level,
             image: c.thumbnail,
+            totalLiveSessions: c.totalLiveSessions,
+            averageRating: c.averageRating,
+            totalReviews: c.totalReviews,
         }));
 
         res.json(result);

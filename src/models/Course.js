@@ -27,6 +27,13 @@ const courseSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        // Maximum number of live sessions
+        // allowed for this course
+        totalLiveSessions: {
+            type: Number,
+            required: true,
+            min: 1,
+        },
 
         averageRating: {
             type: Number,

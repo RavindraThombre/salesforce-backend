@@ -3,91 +3,234 @@ const Payment = require("../models/Payment");
 const Student = require("../models/Student");
 const Course = require("../models/Course");
 const crypto = require("crypto");
+
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY,
     key_secret: process.env.RAZORPAY_SECRET,
 });
 
+
+// ==========================================
+// GET FINAL COURSE AMOUNT
+// ==========================================
+
+const getCourseAmount = (course) => {
+    const price = Number(course.price);
+    const discountPrice = Number(course.discountPrice);
+
+    const validPrice =
+        Number.isFinite(price) && price > 0
+            ? price
+            : 0;
+
+    const validDiscountPrice =
+        Number.isFinite(discountPrice) &&
+            discountPrice > 0 &&
+            discountPrice < validPrice
+            ? discountPrice
+            : 0;
+
+    return validDiscountPrice || validPrice;
+};
+
+
+// ==========================================
+// VALIDATE FRONTEND AMOUNT
+// ==========================================
+
+const validateAmount = (frontendAmount, actualAmount) => {
+    const amount = Number(frontendAmount);
+
+    if (!Number.isFinite(amount)) {
+        return false;
+    }
+
+    // Convert to paise to avoid decimal comparison issues
+    return Math.round(amount * 100) ===
+        Math.round(actualAmount * 100);
+};
+
+
+// ==========================================
+// GET OR CREATE STUDENT
+// ==========================================
+
 const getStudent = async (userId) => {
-    const student = await Student.findOne({
+    let student = await Student.findOne({
         userId,
     });
 
     if (!student) {
-        throw new Error("Student profile not found");
+        student = await Student.create({
+            userId,
+            status: "Active",
+        });
     }
 
     return student;
 };
 
+
+// ==========================================
+// CREATE RAZORPAY ORDER
+// ==========================================
+
 exports.createOrder = async (req, res) => {
     try {
         const { amount, courseId } = req.body;
 
-        // Get student using logged-in user
-        const student = await getStudent(req.user.id);
+        // ------------------------------
+        // VALIDATE COURSE ID
+        // ------------------------------
 
-        // Get course from database
-        const course = await Course.findById(courseId);
+        if (!courseId) {
+            return res.status(400).json({
+                success: false,
+                message: "Course ID is required",
+            });
+        }
+
+        // ------------------------------
+        // VALIDATE FRONTEND AMOUNT
+        // ------------------------------
+
+        if (
+            amount === undefined ||
+            amount === null ||
+            amount === ""
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Course amount is required",
+            });
+        }
+
+        // ------------------------------
+        // GET STUDENT
+        // ------------------------------
+
+        const student = await getStudent(
+            req.user.id
+        );
+
+        // ------------------------------
+        // GET COURSE
+        // ------------------------------
+
+        const course = await Course.findById(
+            courseId
+        );
 
         if (!course) {
             return res.status(404).json({
+                success: false,
                 message: "Course not found",
             });
         }
 
-        // Backend source of truth
-        const actualAmount = Number(course.price) || 0;
+        // ------------------------------
+        // GET DATABASE AMOUNT
+        // ------------------------------
 
-        // Frontend amount validation
-        const frontendAmount = Number(amount) || 0;
+        const actualAmount =
+            getCourseAmount(course);
 
-        if (frontendAmount !== actualAmount) {
+        // ------------------------------
+        // VALIDATE AMOUNT
+        // ------------------------------
+
+        const isValidAmount = validateAmount(
+            amount,
+            actualAmount
+        );
+
+        if (!isValidAmount) {
+            console.error(
+                "Amount validation failed:",
+                {
+                    courseId,
+                    frontendAmount: amount,
+                    actualAmount,
+                    price: course.price,
+                    discountPrice: course.discountPrice,
+                }
+            );
+
             return res.status(400).json({
+                success: false,
                 message: "Invalid course amount",
             });
         }
 
-        // Prevent duplicate enrollment
-        const existing = await Payment.findOne({
-            studentId: student._id,
-            courseId,
-            status: "completed",
-        });
+        // ------------------------------
+        // CHECK FREE COURSE
+        // ------------------------------
 
-        if (existing) {
+        if (actualAmount <= 0) {
             return res.status(400).json({
+                success: false,
+                message:
+                    "This is a free course. Razorpay order is not required.",
+            });
+        }
+
+        // ------------------------------
+        // PREVENT DUPLICATE ENROLLMENT
+        // ------------------------------
+
+        const existingPayment =
+            await Payment.findOne({
+                studentId: student._id,
+                courseId,
+                status: "completed",
+            });
+
+        if (existingPayment) {
+            return res.status(400).json({
+                success: false,
                 message: "Already enrolled",
             });
         }
 
-        // Prevent creating Razorpay order for free course
-        if (actualAmount === 0) {
-            return res.status(400).json({
-                message: "This is a free course. Razorpay order is not required.",
+        // ------------------------------
+        // CREATE RAZORPAY ORDER
+        // ------------------------------
+
+        const order =
+            await razorpay.orders.create({
+                amount: Math.round(
+                    actualAmount * 100
+                ),
+                currency: "INR",
+                receipt: `receipt_${Date.now()}`,
             });
-        }
 
-        const order = await razorpay.orders.create({
-            amount: Math.round(actualAmount * 100),
-            currency: "INR",
-            receipt: `receipt_${Date.now()}`,
-        });
-
-        res.json({
+        return res.status(200).json({
+            success: true,
             orderId: order.id,
             courseId,
             amount: actualAmount,
         });
 
     } catch (err) {
-        console.error("Create order error:", err);
+        console.error(
+            "Create order error:",
+            err
+        );
 
-        res.status(500).json({
-            message: err.message,
+        return res.status(500).json({
+            success: false,
+            message:
+                err.message ||
+                "Failed to create payment order",
         });
     }
 };
+
+
+// ==========================================
+// VERIFY PAYMENT
+// ==========================================
 
 exports.verifyPayment = async (req, res) => {
     try {
@@ -96,48 +239,65 @@ exports.verifyPayment = async (req, res) => {
             razorpay_payment_id,
             razorpay_signature,
             courseId,
-            isFree,
             amount,
         } = req.body;
 
-        const student = await getStudent(req.user.id);
+        // ------------------------------
+        // VALIDATE COURSE ID
+        // ------------------------------
 
-        // =====================================
-        // GET ACTUAL COURSE PRICE FROM DATABASE
-        // =====================================
+        if (!courseId) {
+            return res.status(400).json({
+                success: false,
+                message: "Course ID is required",
+            });
+        }
 
-        const course = await Course.findById(courseId);
+        // ------------------------------
+        // GET STUDENT
+        // ------------------------------
+
+        const student = await getStudent(
+            req.user.id
+        );
+
+        // ------------------------------
+        // GET COURSE
+        // ------------------------------
+
+        const course = await Course.findById(
+            courseId
+        );
 
         if (!course) {
             return res.status(404).json({
+                success: false,
                 message: "Course not found",
             });
         }
 
-        const actualAmount = Number(course.price) || 0;
-        const frontendAmount = Number(amount) || 0;
+        // ------------------------------
+        // DATABASE SOURCE OF TRUTH
+        // ------------------------------
 
-        // Optional security check
-        if (!isFree && frontendAmount !== actualAmount) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid course amount",
-            });
-        }
+        const actualAmount =
+            getCourseAmount(course);
 
-        // =====================================
+        // ==========================================
         // FREE COURSE
-        // =====================================
+        // ==========================================
 
-        if (isFree || actualAmount === 0) {
-            const existing = await Payment.findOne({
-                studentId: student._id,
-                courseId,
-                status: "completed",
-            });
+        if (actualAmount === 0) {
 
-            if (existing) {
-                return res.json({
+            const existingPayment =
+                await Payment.findOne({
+                    studentId: student._id,
+                    courseId,
+                    status: "completed",
+                });
+
+            if (existingPayment) {
+                return res.status(200).json({
                     success: true,
                     message: "Already enrolled",
                 });
@@ -160,22 +320,75 @@ exports.verifyPayment = async (req, res) => {
                 }
             );
 
-            return res.json({
+            return res.status(200).json({
                 success: true,
-                message: "Free course enrolled successfully",
+                message:
+                    "Free course enrolled successfully",
             });
         }
 
-        // =====================================
-        // PAID COURSE - VERIFY RAZORPAY
-        // =====================================
+        // ==========================================
+        // PAID COURSE VALIDATION
+        // ==========================================
+
+        if (
+            amount === undefined ||
+            amount === null ||
+            amount === ""
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Course amount is required",
+            });
+        }
+
+        const isValidAmount = validateAmount(
+            amount,
+            actualAmount
+        );
+
+        if (!isValidAmount) {
+            console.error(
+                "Verify amount validation failed:",
+                {
+                    courseId,
+                    frontendAmount: amount,
+                    actualAmount,
+                    price: course.price,
+                    discountPrice: course.discountPrice,
+                }
+            );
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid course amount",
+            });
+        }
+
+        // ==========================================
+        // VALIDATE RAZORPAY DATA
+        // ==========================================
+
+        if (
+            !razorpay_order_id ||
+            !razorpay_payment_id ||
+            !razorpay_signature
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Incomplete payment information",
+            });
+        }
+
+        // ==========================================
+        // VERIFY RAZORPAY SIGNATURE
+        // ==========================================
 
         const body =
-            razorpay_order_id +
-            "|" +
-            razorpay_payment_id;
+            `${razorpay_order_id}|${razorpay_payment_id}`;
 
-        const expected = crypto
+        const expectedSignature = crypto
             .createHmac(
                 "sha256",
                 process.env.RAZORPAY_SECRET
@@ -183,44 +396,62 @@ exports.verifyPayment = async (req, res) => {
             .update(body)
             .digest("hex");
 
-        if (expected !== razorpay_signature) {
+        if (
+            expectedSignature !==
+            razorpay_signature
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid payment",
+                message: "Invalid payment signature",
             });
         }
 
-        // Prevent duplicate payment
-        const existing = await Payment.findOne({
-            studentId: student._id,
-            courseId,
-            status: "completed",
-        });
+        // ==========================================
+        // PREVENT DUPLICATE PAYMENT
+        // ==========================================
 
-        if (existing) {
-            return res.json({
+        const existingPayment =
+            await Payment.findOne({
+                studentId: student._id,
+                courseId,
+                status: "completed",
+            });
+
+        if (existingPayment) {
+            return res.status(200).json({
                 success: true,
                 message: "Already enrolled",
             });
         }
 
-        // =====================================
-        // SAVE PAID PAYMENT
-        // =====================================
+        // ==========================================
+        // SAVE PAYMENT
+        // ==========================================
 
         await Payment.create({
             studentId: student._id,
             courseId,
-            amount: actualAmount, // Database amount
+
+            // Always save database amount
+            amount: actualAmount,
+
             status: "completed",
             paymentType: "PAID",
 
-            razorpayOrderId: razorpay_order_id,
-            razorpayPaymentId: razorpay_payment_id,
-            razorpaySignature: razorpay_signature,
+            razorpayOrderId:
+                razorpay_order_id,
+
+            razorpayPaymentId:
+                razorpay_payment_id,
+
+            razorpaySignature:
+                razorpay_signature,
         });
 
-        // Add course to student enrollment
+        // ==========================================
+        // ENROLL STUDENT
+        // ==========================================
+
         await Student.findByIdAndUpdate(
             student._id,
             {
@@ -230,9 +461,10 @@ exports.verifyPayment = async (req, res) => {
             }
         );
 
-        res.json({
+        return res.status(200).json({
             success: true,
-            message: "Payment successful and course enrolled",
+            message:
+                "Payment successful and course enrolled",
         });
 
     } catch (err) {
@@ -241,8 +473,11 @@ exports.verifyPayment = async (req, res) => {
             err
         );
 
-        res.status(500).json({
-            message: err.message,
+        return res.status(500).json({
+            success: false,
+            message:
+                err.message ||
+                "Payment verification failed",
         });
     }
 };
